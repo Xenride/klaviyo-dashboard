@@ -76,7 +76,7 @@ export const payloads = {
           metric_id: metricId,
           measurements: ["count"],
           timezone: "UTC",
-          by: ["campaign_id"], // si diera 400, prueba ["campaign_name"]
+          by: ["campaign_name"], // cambiado desde "campaign_id" por 400 invalid choice
           filter: [
             `greater-or-equal(datetime,${range.from})`,
             `less-than(datetime,${range.to})`,
@@ -94,7 +94,7 @@ export const payloads = {
           metric_id: metricId,
           measurements: ["sum_value"],
           timezone: "UTC",
-          by: ["flow"], // si diera 400, prueba ["flow_id"]
+          by: ["flow_id"], // cambiado desde "flow" para compatibilidad
           filter: [
             `greater-or-equal(datetime,${range.from})`,
             `less-than(datetime,${range.to})`,
