@@ -10,6 +10,9 @@ import {
 
 import { KLAVIYO_METRICS } from "@/lib/klaviyoIds";
 import { isoRangeUnderOneYear, postAggregates, payloads } from "@/lib/klaviyo";
+import { ListGrowthCard } from "@/components/widgets/ListGrowthCard";
+import { CampaignEngagementCard } from "@/components/widgets/CampaignEngagementCard";
+import { RevenueByFlowCard } from "@/components/widgets/RevenueByFlowCard";
 
 type SeriesPoint = { date: string; value: number; group?: string };
 
@@ -318,6 +321,13 @@ const Home = () => {
           </BarChart>
         </ResponsiveContainer>
       </Card>
+
+      {/* Klaviyo widgets (live data via hooks) */}
+      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+        <ListGrowthCard />
+        <CampaignEngagementCard />
+        <RevenueByFlowCard />
+      </div>
     </div>
   );
 };
