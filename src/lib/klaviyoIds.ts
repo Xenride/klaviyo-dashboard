@@ -1,8 +1,8 @@
 export const KLAVIYO_METRICS = {
-  openedEmail:     "ShuTva", // Opened Email
-  clickedEmail:    "X8nKKn", // Clicked Email
-  subscribedEmail: "TZiLbj", // Subscribed to Email Marketing
-  placedOrder:     "SZ9ctb", // Placed Order (Shopify)
+  openedEmail:     "Tr7pQZ", // Opened Email
+  clickedEmail:    "YfZg7d", // Clicked Email
+  subscribedEmail: "SS3EdZ", // Subscribed to Email Marketing
+  placedOrder:     "RHiLFU", // Placed Order (Shopify)
 };
 
 export type MetricKey = keyof typeof KLAVIYO_METRICS;
