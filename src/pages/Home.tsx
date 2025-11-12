@@ -15,32 +15,141 @@ type SeriesPoint = { date: string; value: number; group?: string };
 
 function safeMapMonthly(resp: any): SeriesPoint[] {
   const json = resp && typeof resp === "object" ? resp : {};
-  const attrs = json?.data?.attributes ?? json?.attributes ?? {};
+  const dataNode = Array.isArray(json) ? { data: json } : json;
+  const attrs = dataNode?.data?.attributes ?? dataNode?.attributes ?? {};
   const rows =
-    attrs?.data ||
-    attrs?.results ||
-    json?.data ||
+    attrs?.data ??
+    attrs?.results ??
+    (Array.isArray(dataNode?.data) ? dataNode.data : []) ??
     [];
+  const topLevelDates: string[] = attrs?.dates ?? attrs?.intervals ?? [];
   const out: SeriesPoint[] = [];
 
-  const pushRow = (row: any) => {
-    const date = row?.datetime || row?.date || row?.start || row?.time;
-    const value = Number(row?.value ?? row?.count ?? row?.sum_value ?? 0);
-    const group = row?.group ?? row?.campaign_id ?? row?.flow ?? row?.name;
-    if (date) out.push({ date, value, group });
+  const coerceGroup = (row: any, fallback?: string) => {
+    if (!row || typeof row !== "object") return fallback ?? "total";
+    const candidates = [
+      row.group,
+      row.group_name,
+      row.name,
+      row.title,
+      row.campaign_id,
+      row.flow,
+      row.metric_id,
+    ];
+    const found = candidates.find((c) => typeof c === "string" && c.trim());
+    if (found) return found;
+    if (Array.isArray(row.dimensions) && row.dimensions.length) {
+      return row.dimensions.join(" · ");
+    }
+    if (Array.isArray(row.dimension_values) && row.dimension_values.length) {
+      return row.dimension_values.join(" · ");
+    }
+    if (typeof row.dimension_values_display_name === "string") {
+      return row.dimension_values_display_name;
+    }
+    if (typeof row.id === "string" && row.id.trim()) return row.id;
+    return fallback ?? "total";
+  };
+
+  const coerceNumber = (val: any) => {
+    if (typeof val === "number") return val;
+    if (typeof val === "string") {
+      const n = Number(val);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    if (val && typeof val === "object") {
+      const candidates = [
+        val.value,
+        val.count,
+        val.sum_value,
+        val.sum,
+        val.total,
+      ];
+      const found = candidates.find((c) => typeof c === "number");
+      if (typeof found === "number") return found;
+    }
+    return undefined;
+  };
+
+  const pushValues = (
+    values: any[],
+    dates: string[],
+    group: string,
+  ) => {
+    values.forEach((val, idx) => {
+      const numberVal = coerceNumber(val);
+      const date =
+        dates[idx] ??
+        (typeof val === "object"
+          ? val?.interval ?? val?.datetime ?? val?.date ?? val?.time
+          : undefined);
+      if (typeof numberVal === "number" && date) {
+        out.push({ date, value: numberVal, group });
+      }
+    });
+  };
+
+  const flattenRow = (row: any) => {
+    if (!row || typeof row !== "object") return;
+    const rowDates: string[] =
+      row.dates ??
+      row.intervals ??
+      row.datetimes ??
+      row.timestamps ??
+      topLevelDates;
+    const group = coerceGroup(row, "total");
+
+    // measurements format (e.g., { measurements: { count: [ ... ] } })
+    if (row.measurements && typeof row.measurements === "object") {
+      Object.entries(row.measurements).forEach(([measurementKey, series]) => {
+        if (Array.isArray(series)) {
+          pushValues(series, rowDates, group ?? measurementKey);
+        } else if (series && typeof series === "object") {
+          const nested =
+            (Array.isArray(series.values) && series.values) ||
+            (Array.isArray(series.data) && series.data);
+          if (nested) {
+            pushValues(nested, rowDates, group ?? measurementKey);
+          } else {
+            const value = coerceNumber(series);
+            if (typeof value === "number") {
+              const date =
+                series?.interval ??
+                series?.datetime ??
+                series?.date ??
+                series?.time ??
+                rowDates[0];
+              if (date) out.push({ date, value, group });
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    if (Array.isArray(row.intervals)) {
+      row.intervals.forEach(flattenRow);
+      return;
+    }
+    if (Array.isArray(row.series)) {
+      row.series.forEach(flattenRow);
+      return;
+    }
+
+    const date =
+      row?.datetime || row?.date || row?.start || row?.time || rowDates[0];
+    const value = coerceNumber(row);
+    if (date && typeof value === "number") {
+      out.push({ date, value, group });
+    }
   };
 
   if (Array.isArray(rows)) {
-    rows.forEach((r) => {
-      if (Array.isArray(r?.intervals)) {
-        r.intervals.forEach(pushRow);
-      } else if (Array.isArray(r?.series)) {
-        r.series.forEach(pushRow);
-      } else {
-        pushRow(r);
-      }
-    });
+    rows.forEach(flattenRow);
+  } else if (rows && typeof rows === "object") {
+    flattenRow(rows);
   }
+
   return out;
 }
 
