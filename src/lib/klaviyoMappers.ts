@@ -87,15 +87,60 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
 
   const pushRowsFromArray = (items: any[], group: string) => {
     items.forEach((entry, idx) => {
+      const resolvedGroup = coerceGroup(entry, group);
+
       if (Array.isArray(entry?.data)) {
-        const nestedGroup =
-          entry?.group ??
-          entry?.metric_id ??
-          entry?.name ??
-          entry?.dimension ??
-          group;
-        pushRowsFromArray(entry.data, String(nestedGroup ?? group));
+        pushRowsFromArray(entry.data, resolvedGroup);
         return;
+      }
+
+      const measurementSeries = entry?.measurements?.[measurement];
+      if (Array.isArray(measurementSeries)) {
+        measurementSeries.forEach((val: any, innerIdx: number) => {
+          const numberVal = typeof val === "number" ? val : coerceValue(val);
+          const date =
+            entry?.dates?.[innerIdx] ??
+            entry?.intervals?.[innerIdx] ??
+            entry?.datetimes?.[innerIdx] ??
+            entry?.timestamps?.[innerIdx] ??
+            (typeof val === "object" ? coerceDate(val, innerIdx) : dates[innerIdx]);
+          if (typeof numberVal === "number" && date) {
+            rows.push({ date, group: resolvedGroup, value: numberVal });
+          }
+        });
+        return;
+      }
+
+      if (
+        measurementSeries &&
+        typeof measurementSeries === "object" &&
+        !Array.isArray(measurementSeries)
+      ) {
+        const nestedValues =
+          (Array.isArray(measurementSeries.values) && measurementSeries.values) ||
+          (Array.isArray(measurementSeries.data) && measurementSeries.data);
+        if (nestedValues) {
+          nestedValues.forEach((val: any, innerIdx: number) => {
+            const numberVal = typeof val === "number" ? val : coerceValue(val);
+            const date =
+              measurementSeries?.dates?.[innerIdx] ??
+              measurementSeries?.intervals?.[innerIdx] ??
+              entry?.dates?.[innerIdx] ??
+              entry?.intervals?.[innerIdx] ??
+              (typeof val === "object" ? coerceDate(val, innerIdx) : dates[innerIdx]);
+            if (typeof numberVal === "number" && date) {
+              rows.push({ date, group: resolvedGroup, value: numberVal });
+            }
+          });
+          return;
+        }
+
+        const directValue = coerceValue(measurementSeries);
+        if (typeof directValue === "number") {
+          const date = coerceDate(measurementSeries, idx) ?? dates[idx];
+          if (date) rows.push({ date, group: resolvedGroup, value: directValue });
+          return;
+        }
       }
 
       if (entry?.statistics?.[measurement]?.values) {
@@ -107,7 +152,7 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
             if (typeof value === "number" && date) {
               rows.push({
                 date,
-                group: String(entry?.group ?? group ?? "total"),
+                group: resolvedGroup,
                 value,
               });
             }
@@ -126,7 +171,7 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
         entry[measurement].forEach((val: any, innerIdx: number) => {
           if (typeof val === "number") {
             const date = dates[innerIdx];
-            if (date) rows.push({ date, group, value: val });
+            if (date) rows.push({ date, group: resolvedGroup, value: val });
           }
         });
         return;
@@ -135,7 +180,7 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
       const value = coerceValue(entry);
       const date = coerceDate(entry, idx);
       if (typeof value === "number" && date) {
-        rows.push({ date, group: String(group ?? "total"), value });
+        rows.push({ date, group: resolvedGroup, value });
       }
     });
   };
@@ -158,14 +203,7 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
       else if (Array.isArray(series?.data)) pushRowsFromArray(series.data, group);
     });
   } else if (Array.isArray(dataMatrix)) {
-    if (dates.length) {
-      dates.forEach((d: string, i: number) => {
-        const v = dataMatrix?.[i]?.[measurement] ?? dataMatrix?.[i];
-        if (typeof v === "number") rows.push({ date: d, group: "total", value: v });
-      });
-    } else {
-      pushRowsFromArray(dataMatrix, "total");
-    }
+    pushRowsFromArray(dataMatrix, "total");
   } else {
     // Fallback: cuando no hay dates[] o la estructura es distinta
     if (hasGroups) {
