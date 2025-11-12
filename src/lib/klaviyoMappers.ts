@@ -73,11 +73,15 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
       if (Array.isArray(series)) pushRowsFromArray(series, group);
       else if (Array.isArray(series?.data)) pushRowsFromArray(series.data, group);
     });
-  } else if (Array.isArray(dataMatrix) && dates.length) {
-    dates.forEach((d: string, i: number) => {
-      const v = dataMatrix?.[i]?.[measurement] ?? dataMatrix?.[i];
-      if (typeof v === "number") rows.push({ date: d, group: "total", value: v });
-    });
+  } else if (Array.isArray(dataMatrix)) {
+    if (dates.length) {
+      dates.forEach((d: string, i: number) => {
+        const v = dataMatrix?.[i]?.[measurement] ?? dataMatrix?.[i];
+        if (typeof v === "number") rows.push({ date: d, group: "total", value: v });
+      });
+    } else {
+      pushRowsFromArray(dataMatrix, "total");
+    }
   } else {
     // Fallback: cuando no hay dates[] o la estructura es distinta
     if (hasGroups) {
