@@ -13,6 +13,7 @@ app.use(express.json());
 const BASE = "https://a.klaviyo.com/api";
 const AUTH = `Klaviyo-API-Key ${process.env.KLAVIYO_PRIVATE_KEY}`;
 const REV  = process.env.KLAVIYO_REVISION || "2024-10-15";
+const DEBUG_LOG_BODIES = process.env.KLAVIYO_DEBUG === "1";
 
 // Debug: log breve
 const logReq = (label, info) => {
@@ -50,8 +51,11 @@ app.post("/api/klaviyo/metric-aggregates", async (req, res) => {
       },
       body: JSON.stringify(req.body),
     });
-    const text = await r.text();
-    console.log(`[metric-aggregates:res ${r.status}]`);
+      const text = await r.text();
+      console.log(`[metric-aggregates:res ${r.status}]`);
+      if (DEBUG_LOG_BODIES) {
+        console.log(`[metric-aggregates:res body] ${text.slice(0, 800)}`);
+      }
     res.status(r.status).type("application/json").send(text);
   } catch (e) {
     res.status(500).json({ error: String(e) });

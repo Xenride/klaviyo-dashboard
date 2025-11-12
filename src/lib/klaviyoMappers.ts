@@ -10,9 +10,51 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
   const coerceDate = (entry: any, idx: number) =>
     entry?.interval ??
     entry?.datetime ??
+    entry?.timeframe?.start ??
     entry?.date ??
     entry?.timestamp ??
     dates[idx];
+
+  const coerceGroup = (entry: any, fallback: string) => {
+    if (!entry || typeof entry !== "object") {
+      return String(fallback ?? "total");
+    }
+
+    const direct =
+      entry.group ??
+      entry.group_name ??
+      entry.name ??
+      entry.title ??
+      entry.metric_id ??
+      entry.dimension ??
+      entry.channel ??
+      entry.segment ??
+      entry.flow;
+    if (typeof direct === "string" && direct.trim()) return direct;
+
+    if (typeof entry.dimension_values_display_name === "string") {
+      return entry.dimension_values_display_name;
+    }
+
+    const dimensionValues =
+      entry.dimension_values ??
+      entry.dimension_value ??
+      entry.dimensions ??
+      entry.metric ??
+      entry.profile ??
+      entry.attributes;
+    if (dimensionValues && typeof dimensionValues === "object") {
+      const values = Object.values(dimensionValues).filter(
+        (v) => typeof v === "string" && v.trim(),
+      );
+      if (values.length) return values.join(" · ");
+    }
+
+    if (typeof entry.id === "string") return entry.id;
+    if (typeof entry.slug === "string") return entry.slug;
+
+    return String(fallback ?? "total");
+  };
 
   const coerceValue = (entry: any) => {
     if (typeof entry === "number") return entry;
