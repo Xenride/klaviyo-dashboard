@@ -22,16 +22,58 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
     if (typeof entry.count === "number") return entry.count;
     if (typeof entry.sum === "number") return entry.sum;
     if (typeof entry.total === "number") return entry.total;
+    const stats = entry.statistics?.[measurement];
+    if (typeof stats?.value === "number") return stats.value;
+    if (typeof stats?.count === "number") return stats.count;
+    if (typeof stats?.sum === "number") return stats.sum;
+    if (stats?.values && Array.isArray(stats.values)) {
+      const firstStat = stats.values.find(
+        (v: any) => typeof v === "number" || typeof v?.value === "number",
+      );
+      if (typeof firstStat === "number") return firstStat;
+      if (typeof firstStat?.value === "number") return firstStat.value;
+    }
     if (Array.isArray(entry?.values)) {
-      // algunos responses devuelven values: number[]
-      const numeric = entry.values.find((v: any) => typeof v === "number");
-      if (typeof numeric === "number") return numeric;
+      const firstValue = entry.values.find(
+        (v: any) => typeof v === "number" || typeof v?.value === "number",
+      );
+      if (typeof firstValue === "number") return firstValue;
+      if (typeof firstValue?.value === "number") return firstValue.value;
     }
     return undefined;
   };
 
   const pushRowsFromArray = (items: any[], group: string) => {
     items.forEach((entry, idx) => {
+      if (Array.isArray(entry?.data)) {
+        const nestedGroup =
+          entry?.group ??
+          entry?.metric_id ??
+          entry?.name ??
+          entry?.dimension ??
+          group;
+        pushRowsFromArray(entry.data, String(nestedGroup ?? group));
+        return;
+      }
+
+      if (entry?.statistics?.[measurement]?.values) {
+        const statValues = entry.statistics[measurement].values;
+        if (Array.isArray(statValues)) {
+          statValues.forEach((item: any, innerIdx: number) => {
+            const value = coerceValue(item);
+            const date = coerceDate(item, innerIdx);
+            if (typeof value === "number" && date) {
+              rows.push({
+                date,
+                group: String(entry?.group ?? group ?? "total"),
+                value,
+              });
+            }
+          });
+          return;
+        }
+      }
+
       // Si la serie viene como { [measurement]: number[] }
       if (
         entry &&
@@ -51,7 +93,7 @@ export function mapAggToSeries(resp: AggResponse, measurement = "sum_value") {
       const value = coerceValue(entry);
       const date = coerceDate(entry, idx);
       if (typeof value === "number" && date) {
-        rows.push({ date, group, value });
+        rows.push({ date, group: String(group ?? "total"), value });
       }
     });
   };
