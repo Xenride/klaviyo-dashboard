@@ -14,34 +14,55 @@ import { isoRangeUnderOneYear, postAggregates, payloads } from "@/lib/klaviyo";
 type SeriesPoint = { date: string; value: number; group?: string };
 
 function safeMapMonthly(resp: any): SeriesPoint[] {
-  const json = resp && typeof resp === "object" ? resp : {};
-  const attrs = json?.data?.attributes ?? json?.attributes ?? {};
-  const rows =
-    attrs?.data ||
-    attrs?.results ||
-    json?.data ||
-    [];
-  const out: SeriesPoint[] = [];
+    const json = resp && typeof resp === "object" ? resp : {};
+    const attrs = json?.data?.attributes ?? json?.attributes ?? {};
+    const out: SeriesPoint[] = [];
 
-  const pushRow = (row: any) => {
-    const date = row?.datetime || row?.date || row?.start || row?.time;
-    const value = Number(row?.value ?? row?.count ?? row?.sum_value ?? 0);
-    const group = row?.group ?? row?.campaign_id ?? row?.flow ?? row?.name;
-    if (date) out.push({ date, value, group });
-  };
+    const dates = attrs?.dates;
+    const dataRows = attrs?.data;
 
-  if (Array.isArray(rows)) {
-    rows.forEach((r) => {
-      if (Array.isArray(r?.intervals)) {
-        r.intervals.forEach(pushRow);
-      } else if (Array.isArray(r?.series)) {
-        r.series.forEach(pushRow);
-      } else {
-        pushRow(r);
-      }
-    });
-  }
-  return out;
+    if (Array.isArray(dates) && Array.isArray(dataRows) && dataRows.length > 0) {
+        const measurements = dataRows[0]?.measurements;
+        const counts = measurements?.count ?? measurements?.sum_value ?? [];
+
+        dates.forEach((date: string, index: number) => {
+            const value = Number(counts[index] ?? 0);
+            if (date) {
+                out.push({ date, value }); 
+            }
+        });
+        
+        if (out.length > 0) {
+            return out;
+        }
+    }
+
+    const rows =
+        attrs?.data ||
+        attrs?.results ||
+        json?.data ||
+        [];
+    
+    const pushRow = (row: any) => {
+        const date = row?.datetime || row?.date || row?.start || row?.time;
+        const value = Number(row?.value ?? row?.count ?? row?.sum_value ?? 0);
+        const group = row?.group ?? row?.campaign_id ?? row?.flow ?? row?.name;
+        if (date) out.push({ date, value, group });
+    };
+
+    if (Array.isArray(rows)) {
+        rows.forEach((r) => {
+            if (Array.isArray(r?.intervals)) {
+                r.intervals.forEach(pushRow);
+            } else if (Array.isArray(r?.series)) {
+                r.series.forEach(pushRow);
+            } else {
+                pushRow(r);
+            }
+        });
+    }
+
+    return out;
 }
 
 const Home = () => {
@@ -94,6 +115,8 @@ const Home = () => {
         const clicksByCampaignResp    = await postAggregates(clicksByCamp);
         const revenueByFlowResp       = await postAggregates(revenueByFlow);
 
+        console.log(opensMonthlyResp, clicksMonthlyResp, subsMonthlyResp, ordersByCampaignResp, opensByCampaignResp, clicksByCampaignResp, revenueByFlowResp);
+
         // Series (mensual)
         const opens  = safeMapMonthly(opensMonthlyResp);
         const clicks = safeMapMonthly(clicksMonthlyResp);
@@ -116,6 +139,7 @@ const Home = () => {
           subscribers: totalSubs,
           orders: totalOrders,
         });
+
 
         // Top Campaigns
         const opensByCampRows  = safeMapMonthly(opensByCampaignResp);
