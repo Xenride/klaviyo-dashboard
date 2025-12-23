@@ -3,6 +3,8 @@ export const KLAVIYO_METRICS = {
   clickedEmail:    "X8nKKn", // Clicked Email
   subscribedEmail: "TZiLbj", // Subscribed to Email Marketing
   placedOrder:     "SZ9ctb", // Placed Order (Shopify)
+  receivedEmail:   "U5ULZD", // Received Email
 };
+
 
 export type MetricKey = keyof typeof KLAVIYO_METRICS;

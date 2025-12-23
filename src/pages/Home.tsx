@@ -18,6 +18,7 @@ function safeMapMonthly(resp: any): SeriesPoint[] {
     const attrs = json?.data?.attributes ?? json?.attributes ?? {};
     const out: SeriesPoint[] = [];
 
+    // Lógica para series de tiempo (Opens, Clicks, Received)
     const dates = attrs?.dates;
     const dataRows = attrs?.data;
 
@@ -37,6 +38,7 @@ function safeMapMonthly(resp: any): SeriesPoint[] {
         }
     }
 
+    // Lógica para agrupaciones (Flows, Campaigns)
     const rows =
         attrs?.data ||
         attrs?.results ||
@@ -46,7 +48,20 @@ function safeMapMonthly(resp: any): SeriesPoint[] {
     const pushRow = (row: any) => {
         const date = row?.datetime || row?.date || row?.start || row?.time;
         const value = Number(row?.value ?? row?.count ?? row?.sum_value ?? 0);
-        const group = row?.group ?? row?.campaign_id ?? row?.flow ?? row?.name;
+        
+        // ✨ CORRECCIÓN CLAVE: Agregamos búsqueda en row.dimensions y row.flow_id
+        let group = row?.group || row?.campaign_id || row?.flow || row?.name;
+
+        // Búsqueda en la propiedad 'dimensions' (común para Flows y Campaigns)
+        if (!group && row?.dimensions && typeof row.dimensions === 'object') {
+            group = row.dimensions.flow_id || row.dimensions.campaign_id;
+        }
+
+        // Búsqueda directa en flow_id
+        if (!group) {
+            group = row.flow_id;
+        }
+        
         if (date) out.push({ date, value, group });
     };
 
@@ -73,7 +88,7 @@ const Home = () => {
   const [clickSeries, setClickSeries] = useState<SeriesPoint[]>([]);
 
   const [totals, setTotals] = useState({
-    opens: 0, clicks: 0, orders: 0, subscribers: 0
+    opens: 0, clicks: 0, orders: 0, subscribers: 0, received: 0 // Nuevo estado para correos recibidos
   });
 
   const [topCampaigns, setTopCampaigns] = useState<
@@ -97,6 +112,7 @@ const Home = () => {
         const opensMonthly    = payloads.countMonthly(KLAVIYO_METRICS.openedEmail, { from, to });
         const clicksMonthly   = payloads.countMonthly(KLAVIYO_METRICS.clickedEmail, { from, to });
         const subsMonthly     = payloads.countMonthly(KLAVIYO_METRICS.subscribedEmail, { from, to });
+        const receivedMonthly = payloads.countMonthly(KLAVIYO_METRICS.receivedEmail, { from, to }); // Llamada para correos recibidos
 
         // 2) Agrupados por campaña
         const ordersByCamp    = payloads.countByCampaign(KLAVIYO_METRICS.placedOrder, { from, to });
@@ -110,12 +126,20 @@ const Home = () => {
         const opensMonthlyResp        = await postAggregates(opensMonthly);
         const clicksMonthlyResp       = await postAggregates(clicksMonthly);
         const subsMonthlyResp         = await postAggregates(subsMonthly);
+        const receivedMonthlyResp     = await postAggregates(receivedMonthly); // Esperar correos recibidos
         const ordersByCampaignResp    = await postAggregates(ordersByCamp);
         const opensByCampaignResp     = await postAggregates(opensByCamp);
         const clicksByCampaignResp    = await postAggregates(clicksByCamp);
         const revenueByFlowResp       = await postAggregates(revenueByFlow);
 
-        console.log(opensMonthlyResp, clicksMonthlyResp, subsMonthlyResp, ordersByCampaignResp, opensByCampaignResp, clicksByCampaignResp, revenueByFlowResp);
+        // Ya no necesitamos el console.log grande, pero lo dejo comentado por si acaso
+        /*
+        console.log("Klaviyo Responses:", {
+          opensMonthlyResp, clicksMonthlyResp, subsMonthlyResp, 
+          receivedMonthlyResp, 
+          ordersByCampaignResp, opensByCampaignResp, clicksByCampaignResp, revenueByFlowResp
+        });
+        */
 
         // Series (mensual)
         const opens  = safeMapMonthly(opensMonthlyResp);
@@ -128,6 +152,7 @@ const Home = () => {
         const totalOpens  = sumVals(opens);
         const totalClicks = sumVals(clicks);
         const totalSubs   = sumVals(safeMapMonthly(subsMonthlyResp));
+        const totalReceived = sumVals(safeMapMonthly(receivedMonthlyResp)); // Calcular total de recibidos
 
         // Orders desde campañas
         const ordersByCampRows = safeMapMonthly(ordersByCampaignResp);
@@ -138,6 +163,7 @@ const Home = () => {
           clicks: totalClicks,
           subscribers: totalSubs,
           orders: totalOrders,
+          received: totalReceived, // Establecer total de recibidos
         });
 
 
@@ -185,8 +211,14 @@ const Home = () => {
   }, []);
 
   const kpis = useMemo(() => {
-    const openRate  = totals.opens ? ((totals.opens / Math.max(totals.opens, 1)) * 100).toFixed(2) : "0.00";  // placeholder
-    const clickRate = totals.opens ? ((totals.clicks / Math.max(totals.opens, 1)) * 100).toFixed(2) : "0.00"; // CTOR aprox
+    const totalReceived = Math.max(totals.received, 1); // Previene división por cero
+    
+    // CORRECCIÓN FINAL: Open Rate = (Opens / Received) * 100
+    const openRate  = ((totals.opens / totalReceived) * 100).toFixed(2);
+    
+    // Click Rate (CTOR) = (Clicks / Opens) * 100
+    const clickRate = totals.opens ? ((totals.clicks / Math.max(totals.opens, 1)) * 100).toFixed(2) : "0.00";
+    
     return {
       totalOrdersLabel: totals.orders.toLocaleString(),
       openRate,
@@ -220,7 +252,7 @@ const Home = () => {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <KPICard title="Total Orders" value={kpis.totalOrdersLabel} change="+12.5%" changeType="positive" icon={DollarSign} />
-        <KPICard title="Open Rate (approx)"  value={`${kpis.openRate}%`}  change="+2.3%" changeType="positive" icon={Mail} />
+        <KPICard title="Open Rate"  value={`${kpis.openRate}%`}  change="+2.3%" changeType="positive" icon={Mail} />
         <KPICard title="Click Rate (CTOR)"   value={`${kpis.clickRate}%`} change="+1.8%" changeType="positive" icon={MousePointerClick} />
         <KPICard title="List Growth"         value={kpis.listGrowthLabel} change="+8.2%" changeType="positive" icon={Users} />
       </div>
@@ -263,8 +295,9 @@ const Home = () => {
           <h2 className="mb-4 text-xl font-bold text-foreground">Top Campaigns (by Orders)</h2>
           <div className="space-y-3">
             {topCampaigns.map((c, index) => {
-              const openRate = c.opens ? ((c.opens / c.opens) * 100).toFixed(2) : "0.00";
-              const clickRate = c.opens ? ((c.clicks / c.opens) * 100).toFixed(2) : "0.00";
+              // El Open Rate por campaña sigue siendo aproximado sin la métrica de Sent Email por campaña
+              // Mantenemos el CTOR por campaña (Clicks / Opens)
+              const campaignClickRate = c.opens ? ((c.clicks / Math.max(c.opens, 1)) * 100).toFixed(2) : "0.00";
               return (
                 <div key={c.id} className="rounded-lg border border-border bg-card/50 p-4 transition-all hover:bg-card">
                   <div className="flex items-start justify-between">
@@ -276,8 +309,8 @@ const Home = () => {
                         <h3 className="font-semibold text-foreground">{c.name || "(Unnamed Campaign)"}</h3>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-3 text-xs">
-                        <span className="text-muted-foreground">Open: <span className="font-medium text-foreground">{openRate}%</span></span>
-                        <span className="text-muted-foreground">CTR: <span className="font-medium text-foreground">{clickRate}%</span></span>
+                        <span className="text-muted-foreground">Opens: <span className="font-medium text-foreground">{c.opens.toLocaleString()}</span></span>
+                        <span className="text-muted-foreground">CTOR: <span className="font-medium text-foreground">{campaignClickRate}%</span></span>
                         <span className="text-muted-foreground">Orders: <span className="font-medium text-foreground">{c.orders.toLocaleString()}</span></span>
                       </div>
                     </div>
