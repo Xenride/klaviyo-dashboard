@@ -1,39 +1,31 @@
-// src/lib/klaviyo.ts
 import { fetchWithRetry } from "./http";
 
 export type Range = { from: string; to: string };
 
-// Máx 1 año (dejamos 364 días)
-export function isoRangeUnderOneYear(): Range {
+/**
+ * Calcula el rango ISO dinámicamente según los días recibidos
+ */
+export function getISORange(days: number): Range {
   const to = new Date();
   const from = new Date(to);
-  from.setDate(from.getDate() - 364);
+  from.setDate(from.getDate() - days);
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
-/**
- * Semáforo global simple para SERIALIZAR todas las llamadas a /metric-aggregates.
- * Evita picos concurrentes que disparan 429.
- */
 let chain = Promise.resolve();
-const paceMs = 250; // pequeño pacing entre llamadas
+const paceMs = 250;
 
 export async function postAggregates(payload: any) {
-  // Encola en cadena para que solo corra una request a la vez
   chain = chain.then(async () => {
-    // pequeño delay anti-ráfaga
     await new Promise((r) => setTimeout(r, paceMs));
     const res = await fetchWithRetry("/api/klaviyo/metric-aggregates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }, {
-      retries: 6,         // más tolerante con 429
-      baseDelayMs: 600,   // arranca con 600ms
-      maxDelayMs: 6000,   // tope 6s
-      onRetry: ({ attempt, status }) => {
-        // Opcional: console.debug(`Retry #${attempt} (status ${status ?? "net"})`);
-      },
+      retries: 6,
+      baseDelayMs: 600,
+      maxDelayMs: 6000,
     });
 
     if (!res.ok) {
@@ -46,18 +38,16 @@ export async function postAggregates(payload: any) {
   return chain;
 }
 
-/**
- * Payloads válidos (sin "$time" en "by"; el tiempo va en "interval")
- */
 export const payloads = {
-  countMonthly(metricId: string, range: Range) {
+  // Se agregó el parámetro 'interval' para que la gráfica se ajuste al rango
+  countMonthly(metricId: string, range: Range, interval: string = "month") {
     return {
       data: {
         type: "metric-aggregate",
         attributes: {
           metric_id: metricId,
           measurements: ["count"],
-          interval: "month",
+          interval: interval, 
           timezone: "UTC",
           filter: [
             `greater-or-equal(datetime,${range.from})`,
