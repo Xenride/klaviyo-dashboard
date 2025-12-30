@@ -23,7 +23,7 @@ function safeMapMonthly(resp: any): SeriesPoint[] {
 
     if (Array.isArray(dates) && Array.isArray(dataRows) && dataRows.length > 0) {
         const measurements = dataRows[0]?.measurements;
-        const counts = measurements?.count ?? measurements?.sum_value ?? [];
+        const counts = measurements?.count ?? measurements?.sum_value ?? measurements?.unique ?? [];
         dates.forEach((date: string, index: number) => {
             const value = Number(counts[index] ?? 0);
             if (date) out.push({ date, value }); 
@@ -34,7 +34,7 @@ function safeMapMonthly(resp: any): SeriesPoint[] {
     const rows = attrs?.data || attrs?.results || json?.data || [];
     const pushRow = (row: any) => {
         const date = row?.datetime || row?.date || row?.start || row?.time;
-        const value = Number(row?.value ?? row?.count ?? row?.sum_value ?? 0);
+        const value = Number(row?.value ?? row?.count ?? row?.sum_value ?? row?.unique ?? 0);
         let group = row?.group || row?.campaign_id || row?.flow || row?.name;
         if (!group && row?.dimensions) group = row.dimensions.flow_id || row.dimensions.campaign_id;
         if (!group) group = row.flow_id;
@@ -78,14 +78,14 @@ const Home = () => {
         const chartInterval = rangeDays <= 30 ? "day" : "month";
 
         // Llamadas usando el rango dinámico
-        const opensMonthly    = payloads.countMonthly(KLAVIYO_METRICS.openedEmail, { from, to }, chartInterval);
-        const clicksMonthly   = payloads.countMonthly(KLAVIYO_METRICS.clickedEmail, { from, to }, chartInterval);
+        const opensMonthly    = payloads.countMonthly(KLAVIYO_METRICS.openedEmail, { from, to }, chartInterval, "unique");
+        const clicksMonthly   = payloads.countMonthly(KLAVIYO_METRICS.clickedEmail, { from, to }, chartInterval, "unique");
         const subsMonthly     = payloads.countMonthly(KLAVIYO_METRICS.subscribedEmail, { from, to }, chartInterval);
-        const receivedMonthly = payloads.countMonthly(KLAVIYO_METRICS.receivedEmail, { from, to }, chartInterval);
+        const receivedMonthly = payloads.countMonthly(KLAVIYO_METRICS.receivedEmail, { from, to }, chartInterval, "unique");
 
         const ordersByCamp    = payloads.countByCampaign(KLAVIYO_METRICS.placedOrder, { from, to });
-        const opensByCamp     = payloads.countByCampaign(KLAVIYO_METRICS.openedEmail, { from, to });
-        const clicksByCamp    = payloads.countByCampaign(KLAVIYO_METRICS.clickedEmail, { from, to });
+        const opensByCamp     = payloads.countByCampaign(KLAVIYO_METRICS.openedEmail, { from, to }, "unique");
+        const clicksByCamp    = payloads.countByCampaign(KLAVIYO_METRICS.clickedEmail, { from, to }, "unique");
         const revenueByFlow   = payloads.revenueByFlow(KLAVIYO_METRICS.placedOrder, { from, to });
 
         // Ejecución en serie (por el pacing del server.js)

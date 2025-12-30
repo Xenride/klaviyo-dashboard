@@ -43,14 +43,14 @@ export async function postAggregates(payload: any) {
 }
 
 export const payloads = {
-  // Se agregó el parámetro 'interval' para que la gráfica se ajuste al rango
-  countMonthly(metricId: string, range: Range, interval: string = "month") {
+  // Se agregó el parámetro 'interval' y 'measurement'
+  countMonthly(metricId: string, range: Range, interval: string = "month", measurement: string = "count") {
     return {
       data: {
         type: "metric-aggregate",
         attributes: {
           metric_id: metricId,
-          measurements: ["count"],
+          measurements: [measurement],
           interval: interval, 
           timezone: "UTC",
           filter: [
@@ -62,13 +62,13 @@ export const payloads = {
     };
   },
 
-  countByCampaign(metricId: string, range: Range) {
+  countByCampaign(metricId: string, range: Range, measurement: string = "count") {
     return {
       data: {
         type: "metric-aggregate",
         attributes: {
           metric_id: metricId,
-          measurements: ["count"],
+          measurements: [measurement],
           timezone: "UTC",
           by: ["$attributed_message"],
           filter: [

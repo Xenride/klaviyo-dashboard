@@ -23,12 +23,12 @@ export function useCampaignOpensClicks(days: number = 30) {
     queryFn: async () => {
       const range = getISORange(days);
       const [opens, clicks] = await Promise.all([
-        postAggregates(payloads.countByCampaign(KLAVIYO_METRICS.openedEmail, range)),
-        postAggregates(payloads.countByCampaign(KLAVIYO_METRICS.clickedEmail, range)),
+        postAggregates(payloads.countByCampaign(KLAVIYO_METRICS.openedEmail, range, "unique")),
+        postAggregates(payloads.countByCampaign(KLAVIYO_METRICS.clickedEmail, range, "unique")),
       ]);
       return {
-        opens: mapAggToSeries(opens, "count"),
-        clicks: mapAggToSeries(clicks, "count"),
+        opens: mapAggToSeries(opens, "unique"),
+        clicks: mapAggToSeries(clicks, "unique"),
       };
     },
     staleTime: 5 * 60 * 1000,
