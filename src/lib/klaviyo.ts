@@ -7,8 +7,12 @@ export type Range = { from: string; to: string };
  */
 export function getISORange(days: number): Range {
   const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - days);
+  to.setUTCHours(23, 59, 59, 999);
+
+  const from = new Date();
+  from.setUTCDate(from.getUTCDate() - days);
+  from.setUTCHours(0, 0, 0, 0);
+
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
@@ -39,14 +43,14 @@ export async function postAggregates(payload: any) {
 }
 
 export const payloads = {
-  // Se agregó el parámetro 'interval' para que la gráfica se ajuste al rango
-  countMonthly(metricId: string, range: Range, interval: string = "month") {
+  // Se agregó el parámetro 'interval' y 'measurement'
+  countMonthly(metricId: string, range: Range, interval: string = "month", measurement: string = "count") {
     return {
       data: {
         type: "metric-aggregate",
         attributes: {
           metric_id: metricId,
-          measurements: ["count"],
+          measurements: [measurement],
           interval: interval, 
           timezone: "UTC",
           filter: [
@@ -58,13 +62,13 @@ export const payloads = {
     };
   },
 
-  countByCampaign(metricId: string, range: Range) {
+  countByCampaign(metricId: string, range: Range, measurement: string = "count") {
     return {
       data: {
         type: "metric-aggregate",
         attributes: {
           metric_id: metricId,
-          measurements: ["count"],
+          measurements: [measurement],
           timezone: "UTC",
           by: ["$attributed_message"],
           filter: [
