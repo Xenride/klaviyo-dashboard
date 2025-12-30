@@ -7,8 +7,12 @@ export type Range = { from: string; to: string };
  */
 export function getISORange(days: number): Range {
   const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - days);
+  to.setUTCHours(23, 59, 59, 999);
+
+  const from = new Date();
+  from.setUTCDate(from.getUTCDate() - days);
+  from.setUTCHours(0, 0, 0, 0);
+
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
